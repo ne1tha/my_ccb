@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import shlex
-
 from provider_profiles import ResolvedProviderProfile, provider_api_env_keys
+from provider_profiles.env_refs import shell_env_assignment
 
 
 def build_gemini_env_prefix(
@@ -49,7 +48,7 @@ def cleared_api_env_parts(
 
 def export_clause(explicit_env: dict[str, str]) -> str:
     rendered = " ".join(
-        f"{key}={shlex.quote(value)}"
+        shell_env_assignment(key, value)
         for key, value in sorted(explicit_env.items())
         if str(value).strip()
     )

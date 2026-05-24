@@ -47,6 +47,7 @@ Examples:
 - `cmd; agent1:codex`
 - `cmd; agent1:codex, agent2:claude`
 - `cmd, agent1:codex; agent2:codex, agent3:claude`
+- `(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)`
 - `cmd, agent1:codex; agent2:codex, (agent3:claude; agent4:gemini)`
 
 ## 4. Semantic Rules
@@ -81,7 +82,10 @@ Contract:
   - `cmd_enabled`
   - agent `provider`
   - agent `workspace_mode`
-- The trailing TOML overlay may define only `agents.<name>...` tables.
+- The trailing TOML overlay may define `agents.<name>...` tables and top-level
+  provider default shortcuts (`key`, `url`, `model`).
+- Top-level `key`, `url`, and `model` apply only to agents that support those
+  shortcuts and do not already declare an agent-local override.
 - Hybrid overlays must not redefine compact-header-owned agent fields such as:
   - `provider`
   - `workspace_mode`
@@ -104,6 +108,14 @@ key = "..."
 url = "..."
 ```
 
+For generated defaults, user-level `~/.ccb/ccb.config` may contain top-level
+provider defaults:
+
+```toml
+key = "$MY_APIKEY"
+url = "..."
+```
+
 Contract:
 
 - `key` and `url` are supported only for known API-backed providers with
@@ -113,6 +125,10 @@ Contract:
   - `claude`
   - `gemini`
 - `key` and `url` are the only canonical shortcut fields.
+- `key` may be an environment-variable reference such as `$MY_APIKEY` or
+  `${MY_APIKEY}`. Generated project config and provider profile files must keep
+  that reference text and defer secret expansion to the provider launch shell,
+  so the real API key is not persisted under `.ccb`.
 - `key/url` is user-facing sugar only. The loader must compile it to the existing
   provider-profile API env authority for that provider and force
   `provider_profile.inherit_api = false`.
@@ -154,6 +170,13 @@ hybrid `ccb.config` may use an agent-local model shortcut:
 model = "gpt-5"
 ```
 
+For generated defaults, user-level `~/.ccb/ccb.config` may contain a top-level
+model default:
+
+```toml
+model = "gpt-5.5"
+```
+
 Contract:
 
 - `model` is supported only for providers with first-class CLI model flags:
@@ -171,7 +194,15 @@ Contract:
 
 ## 5. Default Layout Contract
 
-Bootstrap must generate a balanced two-column layout over all visible panes.
+New project bootstrap must generate four visible AI panes by default, with two
+Codex panes on the top row and two Claude panes on the bottom row:
+
+```text
+(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)
+```
+
+When a config omits `layout`, CCB generates a balanced two-column layout over
+all visible panes.
 
 For `cmd + N agents`:
 

@@ -94,18 +94,20 @@ def test_load_project_config_rejects_case_insensitive_duplicates(tmp_path: Path)
 def test_build_and_ensure_default_project_config(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo'
     config = build_default_project_config()
-    assert config.default_agents == ('agent1', 'agent2', 'agent3')
-    assert config.cmd_enabled is True
+    assert config.default_agents == ('agent1', 'agent2', 'agent3', 'agent4')
+    assert config.cmd_enabled is False
+    assert config.layout_spec == '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)'
     written = ensure_default_project_config(project_root)
     assert written.exists()
     assert written.read_text(encoding='utf-8') == render_default_project_config_text()
     loaded = load_project_config(project_root)
-    assert loaded.config.default_agents == ('agent1', 'agent2', 'agent3')
-    assert loaded.config.cmd_enabled is True
-    assert set(loaded.config.agents) == {'agent1', 'agent2', 'agent3'}
+    assert loaded.config.default_agents == ('agent1', 'agent2', 'agent3', 'agent4')
+    assert loaded.config.cmd_enabled is False
+    assert set(loaded.config.agents) == {'agent1', 'agent2', 'agent3', 'agent4'}
     assert loaded.config.agents['agent1'].provider == 'codex'
     assert loaded.config.agents['agent2'].provider == 'codex'
     assert loaded.config.agents['agent3'].provider == 'claude'
+    assert loaded.config.agents['agent4'].provider == 'claude'
     assert loaded.config.agents['agent1'].workspace_mode is WorkspaceMode.INPLACE
     assert loaded.config.agents['agent1'].runtime_mode is RuntimeMode.PANE_BACKED
 
@@ -118,6 +120,53 @@ def test_ensure_bootstrap_project_config_allows_empty_anchor(tmp_path: Path) -> 
 
     assert written.exists()
     assert written.read_text(encoding='utf-8') == render_default_project_config_text()
+
+
+def test_ensure_default_project_config_applies_user_provider_defaults(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    home = tmp_path / 'home'
+    project_root = tmp_path / 'repo-user-provider-defaults'
+    monkeypatch.setenv('HOME', str(home))
+    _write(
+        home / '.ccb' / 'ccb.config',
+        'key = "$MY_APIKEY"\nurl = "https://api.example.test/v1"\nmodel = "gpt-5.5"\n',
+    )
+
+    written = ensure_default_project_config(project_root)
+    rendered = written.read_text(encoding='utf-8')
+    loaded = load_project_config(project_root)
+
+    assert rendered.startswith('(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)\n')
+    assert 'key = "$MY_APIKEY"' in rendered
+    assert 'url = "https://api.example.test/v1"' in rendered
+    assert 'model = "gpt-5.5"' in rendered
+    assert loaded.config.default_agents == ('agent1', 'agent2', 'agent3', 'agent4')
+    assert loaded.config.agents['agent1'].api == AgentApiSpec(
+        key='$MY_APIKEY',
+        url='https://api.example.test/v1',
+    )
+    assert loaded.config.agents['agent1'].provider_profile.env == {
+        'OPENAI_API_KEY': '$MY_APIKEY',
+        'OPENAI_BASE_URL': 'https://api.example.test/v1',
+    }
+    assert loaded.config.agents['agent2'].provider_profile.env == {
+        'OPENAI_API_KEY': '$MY_APIKEY',
+        'OPENAI_BASE_URL': 'https://api.example.test/v1',
+    }
+    assert loaded.config.agents['agent3'].provider_profile.env == {
+        'ANTHROPIC_API_KEY': '$MY_APIKEY',
+        'ANTHROPIC_BASE_URL': 'https://api.example.test/v1',
+    }
+    assert loaded.config.agents['agent4'].provider_profile.env == {
+        'ANTHROPIC_API_KEY': '$MY_APIKEY',
+        'ANTHROPIC_BASE_URL': 'https://api.example.test/v1',
+    }
+    assert loaded.config.agents['agent1'].model == 'gpt-5.5'
+    assert loaded.config.agents['agent2'].model == 'gpt-5.5'
+    assert loaded.config.agents['agent3'].model == 'gpt-5.5'
+    assert loaded.config.agents['agent4'].model == 'gpt-5.5'
 
 
 def test_ensure_bootstrap_project_config_rejects_persisted_state_without_config(tmp_path: Path) -> None:

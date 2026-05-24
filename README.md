@@ -643,7 +643,7 @@ Note: `ccb up` is removed; use `ccb ...` with `.ccb/ccb.config`.
 ### ccb.config
 Default lookup order:
 - `.ccb/ccb.config` (project)
-- `~/.ccb/ccb.config` (global)
+- `~/.ccb/ccb.config` (user default template for new projects)
 
 Compact format only:
 ```text
@@ -655,6 +655,16 @@ Enable cmd pane (default title/command):
 agent1:codex,agent2:codex,agent3:claude,cmd
 ```
 
+User-level provider defaults for newly bootstrapped projects:
+```toml
+key = "$MY_APIKEY"
+url = "https://api.example.test/v1"
+model = "gpt-5.5"
+```
+
+Set `MY_APIKEY` in the shell that starts `ccb`; the generated project config
+keeps the `$MY_APIKEY` reference instead of storing the secret value.
+
 Rules:
 - Each agent entry must be `agent_name:provider`.
 - `cmd` is a reserved standalone token for the shell pane, not an agent name.
@@ -663,7 +673,8 @@ Rules:
 - `(...)` groups part of the layout explicitly.
 - Each agent entry expands to fixed defaults: `target='.'`, `workspace_mode='inplace'`, `restore='auto'`, `permission='manual'`.
 - Use `agent_name:provider(worktree)` when you want that agent isolated in its own git worktree.
-- Missing project config is auto-created as `codex:codex,claude:claude`.
+- Missing project config is auto-created as `(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)`.
+- If `~/.ccb/ccb.config` contains top-level `key`, `url`, or `model`, those defaults are projected into the generated project config for supported providers.
 - Cmd pane participates in the layout as the first extra pane and does not change which AI runs in the current pane.
 
 ### Update

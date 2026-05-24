@@ -22,6 +22,8 @@ import cli.phase2 as phase2_module
 from cli.phase2 import maybe_handle_phase2
 from storage.paths import PathLayout
 
+DEFAULT_FOUR_AGENT_CONFIG = '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)\n'
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -182,7 +184,7 @@ def test_phase2_start_bootstraps_missing_project_and_default_config(monkeypatch,
     assert seen['project_root'] == project_root.resolve()
     assert (project_root / '.ccb').is_dir()
     assert (project_root / '.ccb' / 'ccb.config').is_file()
-    assert (project_root / '.ccb' / 'ccb.config').read_text(encoding='utf-8') == 'cmd, agent1:codex; agent2:codex, agent3:claude\n'
+    assert (project_root / '.ccb' / 'ccb.config').read_text(encoding='utf-8') == DEFAULT_FOUR_AGENT_CONFIG
     assert 'start_status: ok' in stdout
     assert 'agents: codex, claude' in stdout
 
@@ -378,7 +380,7 @@ def test_phase2_start_with_new_context_rebuilds_stale_anchor_before_bootstrap(mo
         return SimpleNamespace(
             project_root=str(context.project.project_root),
             project_id=context.project.project_id,
-            started=('agent1', 'agent2', 'agent3'),
+            started=('agent1', 'agent2', 'agent3', 'agent4'),
             daemon_started=False,
             socket_path=str(context.paths.ccbd_socket_path),
         )
@@ -392,7 +394,7 @@ def test_phase2_start_with_new_context_rebuilds_stale_anchor_before_bootstrap(mo
 
     assert code == 0, stderr.getvalue()
     assert seen['ghost_exists'] is False
-    assert seen['config_text'] == 'cmd, agent1:codex; agent2:codex, agent3:claude\n'
+    assert seen['config_text'] == DEFAULT_FOUR_AGENT_CONFIG
     assert seen['restore'] is False
     assert 'start_status: ok' in stdout.getvalue()
 
@@ -414,7 +416,7 @@ def test_phase2_start_with_new_context_rebuilds_after_kill_when_config_missing(m
         return SimpleNamespace(
             project_root=str(context.project.project_root),
             project_id=context.project.project_id,
-            started=('agent1', 'agent2', 'agent3'),
+            started=('agent1', 'agent2', 'agent3', 'agent4'),
             daemon_started=False,
             socket_path=str(context.paths.ccbd_socket_path),
         )
@@ -429,7 +431,7 @@ def test_phase2_start_with_new_context_rebuilds_after_kill_when_config_missing(m
     assert code == 0, stderr.getvalue()
     assert seen['restore'] is False
     assert seen['demo_exists'] is False
-    assert seen['config_text'] == 'cmd, agent1:codex; agent2:codex, agent3:claude\n'
+    assert seen['config_text'] == DEFAULT_FOUR_AGENT_CONFIG
     assert 'start_status: ok' in stdout.getvalue()
 
 

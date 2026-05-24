@@ -10,9 +10,12 @@ from pathlib import Path
 import re
 import shutil
 
+from provider_profiles.env_refs import env_ref_name
+
 
 _CODEX_CUSTOM_PROVIDER_ID = 'custom'
 _BARE_TOML_KEY_RE = re.compile(r'^[A-Za-z0-9_-]+$')
+_MODEL_INSTRUCTIONS_FILE_KEY = 'model_instructions_file'
 _CODEX_PLUGIN_TREE_RELATIVE = Path('.tmp') / 'plugins'
 _CODEX_PLUGIN_SHA_RELATIVE = Path('.tmp') / 'plugins.sha'
 _CODEX_PLUGIN_REQUIRED_RELATIVE_PATHS = (
@@ -49,7 +52,7 @@ def materialize_codex_home_config(
         _write_codex_api_authority_config(target_config, authority, source_config=source_config)
     elif _inherits_config(profile) and _inherits_api(profile) and _source_config_valid(source_config):
         if source_config.is_file():
-            _sync_file(source_config, target_config)
+            _write_inherited_codex_config(target_config, source_config)
         else:
             _write_managed_config_stub(target_config)
     else:
@@ -134,6 +137,16 @@ def _write_codex_api_authority_config(target: Path, authority: CodexApiAuthority
     target.write_text(_render_toml_document(payload), encoding='utf-8')
 
 
+def _write_inherited_codex_config(target: Path, source_config: Path) -> None:
+    payload = _read_source_config_payload(source_config)
+    normalized = _normalize_inherited_config_payload(source_config, payload)
+    if normalized == payload:
+        _sync_file(source_config, target)
+        return
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(_render_toml_document(normalized), encoding='utf-8')
+
+
 def _write_managed_config_stub(target: Path) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text('# ccb agent-local codex config\n', encoding='utf-8')
@@ -141,7 +154,10 @@ def _write_managed_config_stub(target: Path) -> None:
 
 def _managed_codex_config_payload(source_config: Path, *, authority: CodexApiAuthority) -> dict[str, object]:
     payload = {'model_provider': authority.provider_id}
-    inherited_payload = _strip_route_authority(_read_source_config_payload(source_config))
+    inherited_payload = _normalize_inherited_config_payload(
+        source_config,
+        _strip_route_authority(_read_source_config_payload(source_config)),
+    )
     for key, value in inherited_payload.items():
         payload[key] = value
     payload['model_providers'] = {
@@ -216,6 +232,26 @@ def _strip_route_authority(payload: dict[str, object]) -> dict[str, object]:
     return cleaned
 
 
+def _normalize_inherited_config_payload(source_config: Path, payload: dict[str, object]) -> dict[str, object]:
+    normalized = _clone_mapping(payload)
+    _absolutize_model_instructions_file(source_config, normalized)
+    return normalized
+
+
+def _absolutize_model_instructions_file(source_config: Path, payload: dict[str, object]) -> None:
+    raw = payload.get(_MODEL_INSTRUCTIONS_FILE_KEY)
+    if not isinstance(raw, str):
+        return
+    text = raw.strip()
+    if not text or text.startswith('$'):
+        return
+    path = Path(text).expanduser()
+    if path.is_absolute():
+        payload[_MODEL_INSTRUCTIONS_FILE_KEY] = str(path)
+        return
+    payload[_MODEL_INSTRUCTIONS_FILE_KEY] = str(source_config.parent / path)
+
+
 def _clone_mapping(payload: dict[str, object]) -> dict[str, object]:
     return {str(key): _clone_payload(value) for key, value in payload.items()}
 
@@ -231,7 +267,7 @@ def _clone_payload(value: object) -> object:
 def _materialize_auth_file(source: Path, target: Path, *, profile, authority: CodexApiAuthority | None) -> None:
     if authority is not None:
         explicit_key = _explicit_api_key(profile)
-        if explicit_key:
+        if explicit_key and env_ref_name(explicit_key) is None:
             _write_auth_file(target, explicit_key)
         else:
             target.unlink(missing_ok=True)

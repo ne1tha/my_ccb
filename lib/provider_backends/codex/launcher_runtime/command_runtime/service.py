@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import os
-import shlex
 from pathlib import Path
 from typing import Callable
 
 from provider_core.caller_env import caller_context_env
 from provider_backends.codex.runtime_artifacts import codex_runtime_artifact_layout
 from provider_profiles.codex_home_config import codex_api_authority
+from provider_profiles.env_refs import shell_env_assignment
+from runtime_env.proxy import proxy_env_map
+import shlex
 
 
 def build_start_cmd(
@@ -40,7 +42,7 @@ def build_start_cmd(
         codex_home_overrides=codex_home_overrides,
     )
     prefix_parts = build_codex_shell_prefix_fn(profile=profile)
-    exports = ' '.join(f'{key}={shlex.quote(str(value))}' for key, value in env_map.items() if str(value).strip())
+    exports = ' '.join(shell_env_assignment(key, value) for key, value in env_map.items() if str(value).strip())
     if exports:
         prefix_parts.append(f'export {exports}')
     cmd = ' '.join(shlex.quote(str(part)) for part in codex_args)
@@ -79,7 +81,7 @@ def _codex_args(command, spec, runtime_dir: Path, *, profile, provider_start_par
 
 def _env_map(runtime_dir: Path, launch_session_id: str, *, spec, profile, codex_home_overrides: dict[str, str]) -> dict[str, str]:
     artifacts = codex_runtime_artifact_layout(runtime_dir)
-    inherited_api_env = _inherited_api_env(profile=profile)
+    inherited_api_env = _inherited_runtime_env(profile=profile)
     explicit_env: dict[str, str] = {}
     if profile is not None:
         explicit_env.update(profile.env)
@@ -99,21 +101,25 @@ def _env_map(runtime_dir: Path, launch_session_id: str, *, spec, profile, codex_
     }
 
 
-def _inherited_api_env(*, profile) -> dict[str, str]:
+def _inherited_runtime_env(*, profile) -> dict[str, str]:
+    inherited = proxy_env_map()
     if profile is not None and not profile.inherit_api:
-        return {}
-    return {
-        key: value
-        for key, value in os.environ.items()
-        if key in {
-            'OPENAI_API_KEY',
-            'OPENAI_BASE_URL',
-            'OPENAI_API_BASE',
-            'OPENAI_ORG_ID',
-            'OPENAI_ORGANIZATION',
+        return inherited
+    inherited.update(
+        {
+            key: value
+            for key, value in os.environ.items()
+            if key in {
+                'OPENAI_API_KEY',
+                'OPENAI_BASE_URL',
+                'OPENAI_API_BASE',
+                'OPENAI_ORG_ID',
+                'OPENAI_ORGANIZATION',
+            }
+            and str(value).strip()
         }
-        and str(value).strip()
-    }
+    )
+    return inherited
 
 
 __all__ = ['build_codex_shell_prefix', 'build_start_cmd']

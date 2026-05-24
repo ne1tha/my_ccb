@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+from runtime_env.proxy import PROXY_ENV_KEYS
+
 
 _CONTROL_PLANE_ALLOWLIST = {
     'ANTHROPIC_API_KEY',
@@ -30,6 +32,7 @@ _CONTROL_PLANE_ALLOWLIST = {
     'LC_ALL',
     'LC_MESSAGES',
     'LOCALAPPDATA',
+    'MY_APIKEY',
     'OPENAI_API_BASE',
     'OPENAI_API_KEY',
     'OPENAI_BASE_URL',
@@ -56,6 +59,7 @@ _CONTROL_PLANE_ALLOWLIST = {
     'XDG_SESSION_TYPE',
     'XAUTHORITY',
     'WAYLAND_DISPLAY',
+    *PROXY_ENV_KEYS,
 }
 
 _CONTROL_PLANE_BLOCKED_PREFIXES = (

@@ -32,3 +32,12 @@ def test_kill_pid_tree_once_prefers_process_group_on_posix(monkeypatch) -> None:
     assert processes._kill_pid_tree_once(123, force=False) is True
     assert killed == [(900, signal.SIGTERM)]
     assert kill_pid_calls == []
+
+
+def test_is_pid_alive_treats_permission_denied_as_unusable(monkeypatch) -> None:
+    def _deny_probe(pid: int, sig: int) -> None:
+        raise PermissionError('not our process namespace')
+
+    monkeypatch.setattr(processes.os, 'kill', _deny_probe)
+
+    assert processes.is_pid_alive(4) is False

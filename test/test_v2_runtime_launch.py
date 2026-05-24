@@ -1595,6 +1595,7 @@ def test_codex_launcher_build_start_cmd_api_override_clears_global_route_config(
             [
                 'model_provider = "stale"',
                 'model = "gpt-5.4-openai-compact"',
+                'model_instructions_file = "lessons.md"',
                 'model_reasoning_effort = "xhigh"',
                 'disable_response_storage = true',
                 '',
@@ -1611,6 +1612,7 @@ def test_codex_launcher_build_start_cmd_api_override_clears_global_route_config(
         ),
         encoding='utf-8',
     )
+    (source_home / 'lessons.md').write_text('lessons\n', encoding='utf-8')
     (source_home / 'auth.json').write_text('{"OPENAI_API_KEY":"system-key"}\n', encoding='utf-8')
     monkeypatch.setenv('CODEX_HOME', str(source_home))
     _write_provider_profile(
@@ -1650,12 +1652,49 @@ def test_codex_launcher_build_start_cmd_api_override_clears_global_route_config(
     assert 'disable_response_storage = true' in config_text
     assert '[projects."/tmp/demo-project"]' in config_text
     assert '[model_providers.custom]' in config_text
+    assert f'model_instructions_file = "{source_home / "lessons.md"}"' in config_text
     assert 'base_url = "https://api.rootflowai.com"' in config_text
     assert 'wire_api = "responses"' in config_text
     assert 'requires_openai_auth = false' in config_text
     assert 'https://api.ikuncode.cc/v1' not in config_text
     assert 'env_key' not in config_text
     assert (profile_home / 'auth.json').read_text(encoding='utf-8') == '{"OPENAI_API_KEY":"profile-key"}\n'
+
+
+def test_codex_launcher_preserves_api_key_env_reference_without_auth_file(monkeypatch, tmp_path: Path) -> None:
+    runtime_dir = tmp_path / 'runtime-codex-env-ref'
+    profile_home = tmp_path / 'codex-profile-home-env-ref'
+    source_home = tmp_path / 'source-home-env-ref'
+    source_home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv('CODEX_HOME', str(source_home))
+    _write_provider_profile(
+        runtime_dir,
+        ResolvedProviderProfile(
+            provider='codex',
+            agent_name='agent1',
+            mode='isolated',
+            profile_root=str(profile_home),
+            runtime_home=str(profile_home),
+            env={
+                'OPENAI_API_KEY': '$MY_APIKEY',
+                'OPENAI_BASE_URL': 'https://api.rootflowai.com',
+            },
+            inherit_api=False,
+            inherit_auth=False,
+            inherit_config=False,
+        ),
+    )
+    profile_home.mkdir(parents=True, exist_ok=True)
+    (profile_home / 'auth.json').write_text('{"OPENAI_API_KEY":"stale-key"}\n', encoding='utf-8')
+
+    spec = _spec('agent1')
+    command = ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False)
+
+    cmd = codex_launcher.build_start_cmd(command, spec, runtime_dir, 'sess-profile-env-ref')
+
+    assert 'OPENAI_API_KEY="${MY_APIKEY}"' in cmd
+    assert 'stale-key' not in cmd
+    assert (profile_home / 'auth.json').exists() is False
 
 
 def test_codex_launcher_build_start_cmd_skips_resume_when_explicit_api_authority_changed(tmp_path: Path) -> None:
@@ -1827,6 +1866,8 @@ def test_codex_launcher_build_start_cmd_exports_inherited_api_env(monkeypatch, t
     runtime_dir.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv('OPENAI_API_KEY', 'env-key')
     monkeypatch.setenv('OPENAI_BASE_URL', 'https://api.example.test/v1')
+    monkeypatch.setenv('HTTP_PROXY', 'http://127.0.0.1:17890')
+    monkeypatch.setenv('ALL_PROXY', 'socks5://127.0.0.1:17891')
 
     spec = _spec('agent1')
     command = ParsedStartCommand(project=None, agent_names=('agent1',), restore=False, auto_permission=False)
@@ -1835,6 +1876,8 @@ def test_codex_launcher_build_start_cmd_exports_inherited_api_env(monkeypatch, t
 
     assert f'OPENAI_API_KEY={shlex.quote("env-key")}' in cmd
     assert f'OPENAI_BASE_URL={shlex.quote("https://api.example.test/v1")}' in cmd
+    assert f'HTTP_PROXY={shlex.quote("http://127.0.0.1:17890")}' in cmd
+    assert f'ALL_PROXY={shlex.quote("socks5://127.0.0.1:17891")}' in cmd
 
 
 def test_codex_launcher_build_start_cmd_refreshes_managed_home_projection(monkeypatch, tmp_path: Path) -> None:
@@ -2000,6 +2043,68 @@ def test_claude_launcher_build_start_cmd_uses_isolated_profile_api_env(monkeypat
     assert 'https://example.invalid/claude' not in start_cmd
     assert '--settings' not in start_cmd
     assert not (runtime_dir / 'claude-settings.json').exists()
+
+
+def test_claude_launcher_build_start_cmd_inherits_shell_auth_and_proxy_env(monkeypatch, tmp_path: Path) -> None:
+    runtime_dir = tmp_path / 'runtime-claude-inherit-shell'
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    home_dir = tmp_path / 'home'
+    (home_dir / '.claude').mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv('ANTHROPIC_API_KEY', 'anthropic-shell-key')
+    monkeypatch.setenv('HTTP_PROXY', 'http://127.0.0.1:17890')
+    monkeypatch.setenv('ALL_PROXY', 'socks5://127.0.0.1:17891')
+    monkeypatch.setattr('provider_backends.claude.launcher.Path.home', lambda: home_dir)
+    monkeypatch.setattr(
+        claude_launcher,
+        '_resolve_claude_restore_target',
+        lambda **kwargs: ProviderRestoreTarget(run_cwd=runtime_dir, has_history=False),
+    )
+
+    spec = _spec('reviewer', provider='claude')
+    command = ParsedStartCommand(project=None, agent_names=('reviewer',), restore=False, auto_permission=False)
+
+    start_cmd = claude_launcher.build_start_cmd(command, spec, runtime_dir, 'claude-sess-inherit-shell')
+
+    assert f'ANTHROPIC_API_KEY={shlex.quote("anthropic-shell-key")}' in start_cmd
+    assert f'HTTP_PROXY={shlex.quote("http://127.0.0.1:17890")}' in start_cmd
+    assert f'ALL_PROXY={shlex.quote("socks5://127.0.0.1:17891")}' in start_cmd
+
+
+def test_claude_launcher_preserves_api_key_env_reference(monkeypatch, tmp_path: Path) -> None:
+    runtime_dir = tmp_path / 'runtime-claude-env-ref'
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    home_dir = tmp_path / 'home-claude-env-ref'
+    (home_dir / '.claude').mkdir(parents=True, exist_ok=True)
+    profile_root = tmp_path / 'claude-profile-home-env-ref'
+    _write_provider_profile(
+        runtime_dir,
+        ResolvedProviderProfile(
+            provider='claude',
+            agent_name='reviewer',
+            mode='inherit',
+            profile_root=str(profile_root),
+            env={
+                'ANTHROPIC_API_KEY': '$MY_APIKEY',
+                'ANTHROPIC_BASE_URL': 'https://api.rootflowai.com',
+            },
+            inherit_api=False,
+            inherit_auth=False,
+        ),
+    )
+    monkeypatch.setattr('provider_backends.claude.launcher.Path.home', lambda: home_dir)
+    monkeypatch.setattr(
+        claude_launcher,
+        '_resolve_claude_restore_target',
+        lambda **kwargs: ProviderRestoreTarget(run_cwd=runtime_dir, has_history=False),
+    )
+
+    spec = _spec('reviewer', provider='claude')
+    command = ParsedStartCommand(project=None, agent_names=('reviewer',), restore=False, auto_permission=False)
+
+    start_cmd = claude_launcher.build_start_cmd(command, spec, runtime_dir, 'claude-sess-env-ref')
+
+    assert 'ANTHROPIC_API_KEY="${MY_APIKEY}"' in start_cmd
+    assert f'ANTHROPIC_BASE_URL={shlex.quote("https://api.rootflowai.com")}' in start_cmd
 
 
 def test_claude_launcher_build_start_cmd_uses_agent_settings_overlay_when_present(monkeypatch, tmp_path: Path) -> None:

@@ -10,13 +10,14 @@ from storage.paths import PathLayout
 from ..common import CONFIG_FILENAME, ConfigValidationError
 from ..defaults import render_default_project_config_text, render_project_config_text
 from ..paths import project_config_path
+from .global_defaults import bootstrap_default_project_config
 
 
 def ensure_default_project_config(project_root: Path) -> Path:
     config_path = project_config_path(project_root)
     config_path.parent.mkdir(parents=True, exist_ok=True)
     if not config_path.exists():
-        atomic_write_text(config_path, render_default_project_config_text())
+        atomic_write_text(config_path, render_project_config_text(bootstrap_default_project_config()))
     return config_path
 
 

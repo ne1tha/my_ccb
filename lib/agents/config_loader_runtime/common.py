@@ -6,9 +6,9 @@ from pathlib import Path
 from agents.models import ProjectConfig
 
 CONFIG_FILENAME = 'ccb.config'
-DEFAULT_AGENT_ORDER = ('agent1', 'agent2', 'agent3')
+DEFAULT_AGENT_ORDER = ('agent1', 'agent2', 'agent3', 'agent4')
 DEFAULT_DEFAULT_AGENTS = DEFAULT_AGENT_ORDER
-ALLOWED_TOP_LEVEL_KEYS = {'version', 'default_agents', 'agents', 'cmd_enabled', 'layout'}
+ALLOWED_TOP_LEVEL_KEYS = {'version', 'default_agents', 'agents', 'cmd_enabled', 'layout', 'key', 'url', 'model'}
 ALLOWED_PROVIDER_PROFILE_KEYS = {
     'mode',
     'home',

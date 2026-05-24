@@ -15,6 +15,8 @@ import pytest
 from cli.phase2 import maybe_handle_phase2
 import cli.phase2 as phase2_module
 
+DEFAULT_FOUR_AGENT_CONFIG = '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)\n'
+
 
 def _repo_root() -> Path:
     return Path(__file__).resolve().parents[1]
@@ -62,7 +64,7 @@ def test_phase2_start_initializes_empty_existing_anchor(monkeypatch, tmp_path: P
         return SimpleNamespace(
             project_root=str(context.project.project_root),
             project_id=context.project.project_id,
-            started=('agent1', 'agent2', 'agent3'),
+            started=('agent1', 'agent2', 'agent3', 'agent4'),
             daemon_started=False,
             socket_path=str(context.paths.ccbd_socket_path),
         )
@@ -75,9 +77,9 @@ def test_phase2_start_initializes_empty_existing_anchor(monkeypatch, tmp_path: P
     assert seen['source'] == 'anchor'
     assert seen['project_root'] == project_root.resolve()
     assert (project_root / '.ccb' / 'ccb.config').is_file()
-    assert (project_root / '.ccb' / 'ccb.config').read_text(encoding='utf-8') == 'cmd, agent1:codex; agent2:codex, agent3:claude\n'
+    assert (project_root / '.ccb' / 'ccb.config').read_text(encoding='utf-8') == DEFAULT_FOUR_AGENT_CONFIG
     assert 'start_status: ok' in stdout
-    assert 'agents: agent1, agent2, agent3' in stdout
+    assert 'agents: agent1, agent2, agent3, agent4' in stdout
 
 
 def test_phase2_start_rejects_missing_config_when_anchor_has_persisted_state(tmp_path: Path) -> None:

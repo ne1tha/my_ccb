@@ -9,6 +9,8 @@ from cli.context import CliContextBuilder
 from cli.models import ParsedConfigValidateCommand, ParsedStartCommand
 from project.discovery import WORKSPACE_BINDING_FILENAME
 
+DEFAULT_FOUR_AGENT_CONFIG = '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)\n'
+
 
 def test_cli_context_resolves_anchor_project(tmp_path: Path) -> None:
     project_root = tmp_path / 'repo'
@@ -133,4 +135,4 @@ def test_cli_context_bootstraps_local_project_instead_of_reusing_home_anchor(
     assert context.project.project_root == project_root.resolve()
     assert context.project.source == 'bootstrapped'
     rendered = (project_root / '.ccb' / 'ccb.config').read_text(encoding='utf-8')
-    assert rendered == 'cmd, agent1:codex; agent2:codex, agent3:claude\n'
+    assert rendered == DEFAULT_FOUR_AGENT_CONFIG

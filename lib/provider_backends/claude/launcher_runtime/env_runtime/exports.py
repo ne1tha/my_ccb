@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-import shlex
-
 from provider_profiles import provider_api_env_keys
+from provider_profiles.env_refs import shell_env_assignment
+from runtime_env.proxy import proxy_env_map
+
+
+_CLAUDE_AUTH_ENV_KEYS = {"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"}
 
 
 def build_claude_env_prefix(
@@ -14,11 +17,12 @@ def build_claude_env_prefix(
     claude_user_base_url_fn,
 ) -> str:
     api_keys = provider_api_env_keys("claude")
-    explicit_env = collect_explicit_api_env(profile=profile, extra_env=extra_env, api_keys=api_keys)
+    merged_env = collect_inherited_env(profile=profile, env=env or {})
+    merged_env.update(collect_explicit_env(profile=profile, extra_env=extra_env))
     parts = unset_api_env_parts(profile=profile, api_keys=api_keys)
 
-    explicit_env = reconcile_base_url(
-        explicit_env,
+    merged_env = reconcile_base_url(
+        merged_env,
         profile=profile,
         env=env or {},
         parts=parts,
@@ -26,29 +30,40 @@ def build_claude_env_prefix(
         claude_user_base_url_fn=claude_user_base_url_fn,
     )
 
-    export_statement = render_export_statement(explicit_env)
+    export_statement = render_export_statement(merged_env)
     if export_statement:
         parts.append(export_statement)
     return "; ".join(parts)
 
 
-def collect_explicit_api_env(*, profile=None, extra_env: dict[str, str] | None, api_keys: set[str]) -> dict[str, str]:
+def collect_explicit_env(*, profile=None, extra_env: dict[str, str] | None) -> dict[str, str]:
     explicit_env: dict[str, str] = {}
     if profile is not None:
-        explicit_env.update(filtered_api_env(profile.env, api_keys=api_keys))
+        explicit_env.update(dict(profile.env))
     if extra_env:
-        explicit_env.update(filtered_api_env(extra_env, api_keys=api_keys))
+        explicit_env.update(dict(extra_env))
     return explicit_env
 
 
-def filtered_api_env(env_map: dict[str, str], *, api_keys: set[str]) -> dict[str, str]:
-    return {key: value for key, value in env_map.items() if key in api_keys}
+def collect_inherited_env(*, profile=None, env: dict[str, str]) -> dict[str, str]:
+    inherited = proxy_env_map(env)
+    if profile is not None and not profile.inherit_auth:
+        return inherited
+    for key in sorted(_CLAUDE_AUTH_ENV_KEYS):
+        value = str(env.get(key) or "").strip()
+        if value:
+            inherited[key] = value
+    return inherited
 
 
 def unset_api_env_parts(*, profile=None, api_keys: set[str]) -> list[str]:
-    if profile is None or profile.inherit_api:
+    if profile is None:
         return []
-    return [f"unset {key}" for key in sorted(api_keys)]
+    if not profile.inherit_api:
+        return [f"unset {key}" for key in sorted(api_keys)]
+    if not profile.inherit_auth:
+        return [f"unset {key}" for key in sorted(_CLAUDE_AUTH_ENV_KEYS)]
+    return []
 
 
 def reconcile_base_url(
@@ -95,7 +110,7 @@ def ensure_unset(parts: list[str], key: str) -> None:
 
 def render_export_statement(explicit_env: dict[str, str]) -> str:
     exports = " ".join(
-        f"{key}={shlex.quote(value)}"
+        shell_env_assignment(key, value)
         for key, value in sorted(explicit_env.items())
         if str(value).strip()
     )

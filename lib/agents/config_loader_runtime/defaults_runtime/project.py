@@ -16,7 +16,9 @@ DEFAULT_AGENT_PROVIDERS = (
     ('agent1', 'codex'),
     ('agent2', 'codex'),
     ('agent3', 'claude'),
+    ('agent4', 'claude'),
 )
+DEFAULT_LAYOUT_SPEC = '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)'
 
 
 def build_default_project_config() -> ProjectConfig:
@@ -28,7 +30,8 @@ def build_default_project_config() -> ProjectConfig:
         version=2,
         default_agents=DEFAULT_DEFAULT_AGENTS,
         agents=agents,
-        cmd_enabled=True,
+        cmd_enabled=False,
+        layout_spec=DEFAULT_LAYOUT_SPEC,
     )
 
 
@@ -46,4 +49,4 @@ def build_default_agent_spec(*, name: str, provider: str) -> AgentSpec:
     )
 
 
-__all__ = ['DEFAULT_AGENT_PROVIDERS', 'build_default_agent_spec', 'build_default_project_config']
+__all__ = ['DEFAULT_AGENT_PROVIDERS', 'DEFAULT_LAYOUT_SPEC', 'build_default_agent_spec', 'build_default_project_config']

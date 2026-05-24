@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from cli.services.daemon_runtime.policy import STARTUP_TRANSACTION_TIMEOUT_S
+
 
 @dataclass(frozen=True)
 class StartSummary:
@@ -36,7 +38,7 @@ def start_agents(
     }
     if terminal_size is not None:
         start_kwargs['terminal_size'] = terminal_size
-    payload = handle.client.start(**start_kwargs)
+    payload = _start_with_transaction_timeout(handle.client, **start_kwargs)
     _record_daemon_started_flag(
         context,
         daemon_started=handle.started,
@@ -51,6 +53,18 @@ def start_agents(
     if enrich_summary_fn is not None:
         return enrich_summary_fn(context, summary, pre_start_result)
     return summary
+
+
+def _start_with_transaction_timeout(client, **kwargs) -> dict:
+    timeout_client = _client_with_timeout(client, STARTUP_TRANSACTION_TIMEOUT_S)
+    return timeout_client.start(**kwargs)
+
+
+def _client_with_timeout(client, timeout_s: float):
+    with_timeout = getattr(client, 'with_timeout', None)
+    if callable(with_timeout):
+        return with_timeout(timeout_s)
+    return client
 
 
 def _summary_from_start_payload(context, payload: dict, *, daemon_started: bool, cleanup_summary_cls) -> StartSummary:

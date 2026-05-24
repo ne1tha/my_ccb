@@ -26,6 +26,35 @@ def test_build_claude_env_prefix_uses_settings_base_url_when_inheritable() -> No
     assert result == "export ANTHROPIC_BASE_URL=https://api.example.test"
 
 
+def test_build_claude_env_prefix_inherits_shell_auth_and_proxy_env() -> None:
+    result = build_claude_env_prefix(
+        env={
+            "ANTHROPIC_API_KEY": "anthropic-key",
+            "HTTP_PROXY": "http://127.0.0.1:17890",
+            "ALL_PROXY": "socks5://127.0.0.1:17891",
+        },
+        should_drop_base_url_fn=lambda value: False,
+        claude_user_base_url_fn=lambda: "",
+    )
+
+    assert result == (
+        "export ALL_PROXY=socks5://127.0.0.1:17891 "
+        "ANTHROPIC_API_KEY=anthropic-key "
+        "HTTP_PROXY=http://127.0.0.1:17890"
+    )
+
+
+def test_build_claude_env_prefix_keeps_generic_agent_env() -> None:
+    result = build_claude_env_prefix(
+        extra_env={"HTTP_PROXY": "http://127.0.0.1:17890"},
+        env={},
+        should_drop_base_url_fn=lambda value: False,
+        claude_user_base_url_fn=lambda: "",
+    )
+
+    assert result == "export HTTP_PROXY=http://127.0.0.1:17890"
+
+
 def test_write_claude_settings_overlay_returns_none_without_agent_settings(tmp_path) -> None:
     assert write_claude_settings_overlay(tmp_path, profile=None) is None
 

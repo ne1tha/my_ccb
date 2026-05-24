@@ -47,19 +47,31 @@ def _write_provider_stub_launchers(bin_dir: Path) -> None:
 
 @pytest.fixture(autouse=True)
 def _ignore_host_level_tmp_anchor(monkeypatch, tmp_path_factory) -> None:
-    original = project_resolver_module.find_parent_project_anchor_dir
     pytest_tmp_root = tmp_path_factory.getbasetemp().resolve()
 
-    def _patched(path: Path):
-        result = original(path)
+    def _is_host_anchor(result) -> bool:
+        if result is None:
+            return False
+        anchor_root = result.parent.resolve()
+        return pytest_tmp_root.is_relative_to(anchor_root) and not anchor_root.is_relative_to(pytest_tmp_root)
+
+    original_parent_anchor = project_resolver_module.find_parent_project_anchor_dir
+
+    def _patched_parent_anchor(path: Path):
+        result = original_parent_anchor(path)
+        return None if _is_host_anchor(result) else result
+
+    original_nearest_anchor = project_resolver_module.find_nearest_project_anchor
+
+    def _patched_nearest_anchor(path: Path):
+        result = original_nearest_anchor(path)
         if result is None:
             return None
-        anchor_root = result.parent.resolve()
-        if pytest_tmp_root.is_relative_to(anchor_root) and not anchor_root.is_relative_to(pytest_tmp_root):
-            return None
-        return result
+        anchor = result.resolve() / '.ccb'
+        return None if _is_host_anchor(anchor) else result
 
-    monkeypatch.setattr(project_resolver_module, 'find_parent_project_anchor_dir', _patched)
+    monkeypatch.setattr(project_resolver_module, 'find_parent_project_anchor_dir', _patched_parent_anchor)
+    monkeypatch.setattr(project_resolver_module, 'find_nearest_project_anchor', _patched_nearest_anchor)
 
 
 @pytest.fixture(autouse=True)

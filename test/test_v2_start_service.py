@@ -10,6 +10,7 @@ from ccbd.lifecycle_report_store import CcbdStartupReportStore
 from ccbd.models import CcbdStartupReport
 from cli.context import CliContextBuilder
 from cli.models import ParsedStartCommand
+from cli.services.daemon_runtime.policy import STARTUP_TRANSACTION_TIMEOUT_S
 from cli.services.start import start_agents
 from project.resolver import bootstrap_project
 from storage.paths import PathLayout
@@ -80,6 +81,56 @@ def test_start_agents_calls_ccbd_start_with_cli_flags(tmp_path: Path, monkeypatc
     assert summary.started == ('demo',)
     assert summary.daemon_started is True
     assert summary.socket_path == str(context.paths.ccbd_socket_path)
+
+
+def test_start_agents_uses_startup_transaction_timeout_for_start_rpc(tmp_path: Path, monkeypatch) -> None:
+    project_root = tmp_path / 'repo-start-timeout'
+    (project_root / '.ccb').mkdir(parents=True, exist_ok=True)
+    (project_root / '.ccb' / 'ccb.config').write_text('demo:codex\n', encoding='utf-8')
+    bootstrap_project(project_root)
+    command = ParsedStartCommand(project=None, agent_names=('demo',), restore=True, auto_permission=True)
+    context = CliContextBuilder().build(command, cwd=project_root, bootstrap_if_missing=False)
+
+    seen: dict[str, object] = {}
+
+    class _TimeoutClient:
+        def __init__(self, timeout_s: float) -> None:
+            self.timeout_s = timeout_s
+
+        def start(self, **kwargs):
+            seen['timeout_s'] = self.timeout_s
+            seen['kwargs'] = kwargs
+            return {
+                'project_root': str(project_root),
+                'project_id': context.project.project_id,
+                'started': ['demo'],
+                'socket_path': str(context.paths.ccbd_socket_path),
+                'cleanup_summaries': [],
+            }
+
+    class _FakeClient:
+        def with_timeout(self, timeout_s: float):
+            seen['requested_timeout_s'] = timeout_s
+            return _TimeoutClient(timeout_s)
+
+        def start(self, **kwargs):
+            raise AssertionError('start should use the transaction timeout client')
+
+    monkeypatch.setattr(
+        'cli.services.start.ensure_daemon_started',
+        lambda context: SimpleNamespace(client=_FakeClient(), started=True),
+    )
+
+    summary = start_agents(context, command)
+
+    assert seen['requested_timeout_s'] == STARTUP_TRANSACTION_TIMEOUT_S
+    assert seen['timeout_s'] == STARTUP_TRANSACTION_TIMEOUT_S
+    assert seen['kwargs'] == {
+        'agent_names': ('demo',),
+        'restore': True,
+        'auto_permission': True,
+    }
+    assert summary.started == ('demo',)
 
 
 def test_start_agents_passes_terminal_size_when_provided(tmp_path: Path, monkeypatch) -> None:

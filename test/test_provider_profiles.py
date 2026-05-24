@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 
 from agents.models import AgentSpec, PermissionMode, ProviderProfileSpec, QueuePolicy, RestoreMode, RuntimeMode, WorkspaceMode
+from agents.config_loader import ensure_default_project_config, load_project_config
 from provider_backends.claude.launcher_runtime.home import materialize_claude_home_config
 from provider_backends.gemini.launcher_runtime.home import materialize_gemini_home_config
 import provider_profiles.codex_home_config as codex_home_config
@@ -124,6 +125,7 @@ def test_materialize_codex_profile_writes_agent_local_provider_config_for_explic
             [
                 'model_provider = "stale"',
                 'model = "gpt-5.4-openai-compact"',
+                'model_instructions_file = "lessons.md"',
                 'model_reasoning_effort = "xhigh"',
                 'disable_response_storage = true',
                 '',
@@ -140,6 +142,7 @@ def test_materialize_codex_profile_writes_agent_local_provider_config_for_explic
         ),
         encoding='utf-8',
     )
+    (source_home / 'lessons.md').write_text('lessons\n', encoding='utf-8')
     monkeypatch.setenv('CODEX_HOME', str(source_home))
     _write_codex_plugin_source(
         source_home,
@@ -170,6 +173,7 @@ def test_materialize_codex_profile_writes_agent_local_provider_config_for_explic
     config_text = (runtime_home / 'config.toml').read_text(encoding='utf-8')
     assert 'model_provider = "custom"' in config_text
     assert 'model = "gpt-5.4-openai-compact"' in config_text
+    assert f'model_instructions_file = "{source_home / "lessons.md"}"' in config_text
     assert 'model_reasoning_effort = "xhigh"' in config_text
     assert 'disable_response_storage = true' in config_text
     assert '[projects."/tmp/demo-project"]' in config_text
@@ -185,6 +189,84 @@ def test_materialize_codex_profile_writes_agent_local_provider_config_for_explic
     assert (runtime_home / '.tmp' / 'plugins.sha').read_text(encoding='utf-8') == 'plugins-sha-v1\n'
     assert (runtime_home / '.tmp' / 'plugins' / '.agents' / 'plugins' / 'marketplace.json').is_file()
     assert (runtime_home / '.tmp' / 'plugins' / 'plugins' / 'weatherpromise' / 'skills' / 'weatherpromise' / 'SKILL.md').read_text(encoding='utf-8') == 'plugin skill explicit\n'
+
+
+def test_materialize_codex_profile_absolutizes_inherited_model_instructions_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo'
+    source_home = tmp_path / 'system-codex-home'
+    source_home.mkdir(parents=True, exist_ok=True)
+    (source_home / 'config.toml').write_text('model_instructions_file = "lessons.md"\n', encoding='utf-8')
+    (source_home / 'lessons.md').write_text('lessons\n', encoding='utf-8')
+    monkeypatch.setenv('CODEX_HOME', str(source_home))
+
+    profile = materialize_provider_profile(
+        layout=PathLayout(project_root),
+        spec=_spec(
+            'agent1',
+            provider_profile=ProviderProfileSpec(
+                mode='isolated',
+                inherit_api=True,
+                inherit_config=True,
+            ),
+        ),
+        workspace_path=project_root,
+    )
+
+    runtime_home = Path(profile.runtime_home or '')
+    config_text = (runtime_home / 'config.toml').read_text(encoding='utf-8')
+    assert f'model_instructions_file = "{source_home / "lessons.md"}"' in config_text
+
+
+def test_default_project_profiles_apply_user_provider_defaults_to_codex_and_claude(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    home = tmp_path / 'home'
+    project_root = tmp_path / 'repo-user-provider-defaults'
+    source_codex_home = tmp_path / 'system-codex-home'
+    source_codex_home.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv('HOME', str(home))
+    monkeypatch.setenv('CODEX_HOME', str(source_codex_home))
+    (home / '.ccb').mkdir(parents=True, exist_ok=True)
+    (home / '.ccb' / 'ccb.config').write_text(
+        'key = "$MY_APIKEY"\nurl = "https://api.example.test/v1"\nmodel = "gpt-5.5"\n',
+        encoding='utf-8',
+    )
+
+    ensure_default_project_config(project_root)
+    config = load_project_config(project_root).config
+    layout = PathLayout(project_root)
+
+    assert config.layout_spec == '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)'
+    assert config.default_agents == ('agent1', 'agent2', 'agent3', 'agent4')
+    for agent_name in ('agent1', 'agent2', 'agent3', 'agent4'):
+        spec = config.agents[agent_name]
+        profile = materialize_provider_profile(
+            layout=layout,
+            spec=spec,
+            workspace_path=project_root,
+        )
+        assert spec.model == 'gpt-5.5'
+        assert profile.inherit_api is False
+        assert profile.inherit_auth is False
+        if spec.provider == 'codex':
+            assert profile.env == {
+                'OPENAI_API_KEY': '$MY_APIKEY',
+                'OPENAI_BASE_URL': 'https://api.example.test/v1',
+            }
+            runtime_home = Path(profile.runtime_home or '')
+            config_text = (runtime_home / 'config.toml').read_text(encoding='utf-8')
+            assert 'model_provider = "custom"' in config_text
+            assert 'base_url = "https://api.example.test/v1"' in config_text
+            assert (runtime_home / 'auth.json').exists() is False
+        else:
+            assert profile.env == {
+                'ANTHROPIC_API_KEY': '$MY_APIKEY',
+                'ANTHROPIC_BASE_URL': 'https://api.example.test/v1',
+            }
 
 
 def test_materialize_codex_profile_refreshes_plugin_projection_when_source_changes(tmp_path: Path, monkeypatch) -> None:

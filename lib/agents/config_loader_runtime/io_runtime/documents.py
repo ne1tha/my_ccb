@@ -9,7 +9,7 @@ from ..common import ConfigLoadResult, ConfigValidationError
 from ..parsing import validate_project_config
 from ..paths import project_config_path
 
-_ALLOWED_HYBRID_TOP_LEVEL_KEYS = {'agents'}
+_ALLOWED_HYBRID_TOP_LEVEL_KEYS = {'agents', 'key', 'url', 'model'}
 _HYBRID_HEADER_OWNED_AGENT_KEYS = {'provider', 'workspace_mode'}
 
 
@@ -204,10 +204,14 @@ def _merge_hybrid_overlay(
             )
         merged_agents[normalized_name] = _deep_merge_dicts(merged_agents[normalized_name], dict(raw_spec))
 
-    return {
+    merged_document = {
         **dict(base_document),
         'agents': merged_agents,
     }
+    for key in ('key', 'url', 'model'):
+        if key in overlay_document:
+            merged_document[key] = overlay_document[key]
+    return merged_document
 
 
 def _deep_merge_dicts(base: dict[str, object], overlay: dict[str, object]) -> dict[str, object]:
