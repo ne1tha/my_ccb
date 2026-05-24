@@ -22,7 +22,7 @@ import cli.phase2 as phase2_module
 from cli.phase2 import maybe_handle_phase2
 from storage.paths import PathLayout
 
-DEFAULT_FOUR_AGENT_CONFIG = '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)\n'
+DEFAULT_FOUR_AGENT_CONFIG = '(agent1:codex; agent2:codex), (agent3:codex; agent4:codex)\n'
 
 
 def _repo_root() -> Path:

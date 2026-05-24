@@ -47,7 +47,7 @@ Examples:
 - `cmd; agent1:codex`
 - `cmd; agent1:codex, agent2:claude`
 - `cmd, agent1:codex; agent2:codex, agent3:claude`
-- `(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)`
+- `(agent1:codex; agent2:codex), (agent3:codex; agent4:codex)`
 - `cmd, agent1:codex; agent2:codex, (agent3:claude; agent4:gemini)`
 
 ## 4. Semantic Rules
@@ -194,11 +194,10 @@ Contract:
 
 ## 5. Default Layout Contract
 
-New project bootstrap must generate four visible AI panes by default, with two
-Codex panes on the top row and two Claude panes on the bottom row:
+New project bootstrap must generate four visible Codex panes by default:
 
 ```text
-(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)
+(agent1:codex; agent2:codex), (agent3:codex; agent4:codex)
 ```
 
 When a config omits `layout`, CCB generates a balanced two-column layout over

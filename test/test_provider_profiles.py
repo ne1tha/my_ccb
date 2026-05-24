@@ -220,7 +220,7 @@ def test_materialize_codex_profile_absolutizes_inherited_model_instructions_file
     assert f'model_instructions_file = "{source_home / "lessons.md"}"' in config_text
 
 
-def test_default_project_profiles_apply_user_provider_defaults_to_codex_and_claude(
+def test_default_project_profiles_apply_user_provider_defaults_to_codex_agents(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -240,7 +240,7 @@ def test_default_project_profiles_apply_user_provider_defaults_to_codex_and_clau
     config = load_project_config(project_root).config
     layout = PathLayout(project_root)
 
-    assert config.layout_spec == '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)'
+    assert config.layout_spec == '(agent1:codex; agent2:codex), (agent3:codex; agent4:codex)'
     assert config.default_agents == ('agent1', 'agent2', 'agent3', 'agent4')
     for agent_name in ('agent1', 'agent2', 'agent3', 'agent4'):
         spec = config.agents[agent_name]
@@ -262,11 +262,6 @@ def test_default_project_profiles_apply_user_provider_defaults_to_codex_and_clau
             assert 'model_provider = "custom"' in config_text
             assert 'base_url = "https://api.example.test/v1"' in config_text
             assert (runtime_home / 'auth.json').exists() is False
-        else:
-            assert profile.env == {
-                'ANTHROPIC_API_KEY': '$MY_APIKEY',
-                'ANTHROPIC_BASE_URL': 'https://api.example.test/v1',
-            }
 
 
 def test_materialize_codex_profile_refreshes_plugin_projection_when_source_changes(tmp_path: Path, monkeypatch) -> None:

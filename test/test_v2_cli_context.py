@@ -9,7 +9,7 @@ from cli.context import CliContextBuilder
 from cli.models import ParsedConfigValidateCommand, ParsedStartCommand
 from project.discovery import WORKSPACE_BINDING_FILENAME
 
-DEFAULT_FOUR_AGENT_CONFIG = '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)\n'
+DEFAULT_FOUR_AGENT_CONFIG = '(agent1:codex; agent2:codex), (agent3:codex; agent4:codex)\n'
 
 
 def test_cli_context_resolves_anchor_project(tmp_path: Path) -> None:

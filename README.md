@@ -673,7 +673,7 @@ Rules:
 - `(...)` groups part of the layout explicitly.
 - Each agent entry expands to fixed defaults: `target='.'`, `workspace_mode='inplace'`, `restore='auto'`, `permission='manual'`.
 - Use `agent_name:provider(worktree)` when you want that agent isolated in its own git worktree.
-- Missing project config is auto-created as `(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)`.
+- Missing project config is auto-created as `(agent1:codex; agent2:codex), (agent3:codex; agent4:codex)`.
 - If `~/.ccb/ccb.config` contains top-level `key`, `url`, or `model`, those defaults are projected into the generated project config for supported providers.
 - Cmd pane participates in the layout as the first extra pane and does not change which AI runs in the current pane.
 

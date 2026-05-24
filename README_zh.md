@@ -635,7 +635,7 @@ model = "gpt-5.5"
 - `(...)` 表示显式分组
 - 每个 agent 项都会展开成固定默认值：`target='.'`、`workspace_mode='inplace'`、`restore='auto'`、`permission='manual'`
 - 如果希望某个 agent 使用独立 git worktree，请显式写成 `agent_name:provider(worktree)`
-- 缺失项目配置时会自动生成：`(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)`
+- 缺失项目配置时会自动生成：`(agent1:codex; agent2:codex), (agent3:codex; agent4:codex)`
 - 如果 `~/.ccb/ccb.config` 写了顶层 `key`、`url` 或 `model`，新项目配置会把这些默认值投影到支持的 provider agent。
 - cmd pane 作为第一个额外 pane 参与布局，不会改变当前 pane 对应的 AI
 

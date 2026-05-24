@@ -15,10 +15,10 @@ from ..common import DEFAULT_DEFAULT_AGENTS
 DEFAULT_AGENT_PROVIDERS = (
     ('agent1', 'codex'),
     ('agent2', 'codex'),
-    ('agent3', 'claude'),
-    ('agent4', 'claude'),
+    ('agent3', 'codex'),
+    ('agent4', 'codex'),
 )
-DEFAULT_LAYOUT_SPEC = '(agent1:codex; agent2:codex), (agent3:claude; agent4:claude)'
+DEFAULT_LAYOUT_SPEC = '(agent1:codex; agent2:codex), (agent3:codex; agent4:codex)'
 
 
 def build_default_project_config() -> ProjectConfig:
