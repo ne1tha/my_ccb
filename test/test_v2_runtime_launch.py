@@ -1378,6 +1378,7 @@ def test_codex_launcher_build_start_cmd_does_not_require_toml_parser_for_config_
 def test_codex_launcher_build_start_cmd_uses_agent_scoped_session_root_by_default(monkeypatch, tmp_path: Path) -> None:
     runtime_dir = tmp_path / 'repo' / '.ccb' / 'agents' / 'agent1' / 'provider-runtime' / 'codex'
     runtime_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_path / 'repo' / '.git').mkdir(parents=True, exist_ok=True)
     source_home = tmp_path / 'source-home'
     source_home.mkdir(parents=True, exist_ok=True)
     (source_home / 'config.toml').write_text('[model]\nname="gpt-5"\n', encoding='utf-8')
@@ -1394,6 +1395,9 @@ def test_codex_launcher_build_start_cmd_uses_agent_scoped_session_root_by_defaul
     assert f'CODEX_SESSION_ROOT={shlex.quote(str(session_root))}' in cmd
     assert session_root.is_dir()
     assert codex_home.is_dir()
+    config_text = (codex_home / 'config.toml').read_text(encoding='utf-8')
+    assert f'[projects."{tmp_path / "repo"}"]' in config_text
+    assert 'trust_level = "trusted"' in config_text
 
 
 def test_codex_launcher_build_start_cmd_includes_agent_model_shortcut(monkeypatch, tmp_path: Path) -> None:

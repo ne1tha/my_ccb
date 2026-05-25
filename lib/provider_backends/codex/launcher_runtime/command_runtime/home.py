@@ -17,7 +17,12 @@ from provider_backends.codex.start_cmd import strip_resume_start_cmd
 from provider_sessions.files import safe_write_session
 from provider_profiles.codex_home_config import materialize_codex_home_config
 
-from ..session_paths import read_session_payload, session_file_for_runtime_dir, state_dir_for_runtime_dir
+from ..session_paths import (
+    find_project_ccb_dir,
+    read_session_payload,
+    session_file_for_runtime_dir,
+    state_dir_for_runtime_dir,
+)
 
 
 _ENV_ASSIGNMENT_RE = re.compile(
@@ -55,7 +60,12 @@ def prepare_codex_home_overrides(runtime_dir: Path, profile) -> dict[str, str]:
     layout = resolve_codex_home_layout(runtime_dir, profile)
     layout.codex_home.mkdir(parents=True, exist_ok=True)
     layout.session_root.mkdir(parents=True, exist_ok=True)
-    _prepare_managed_home(_system_codex_home(), layout.codex_home, profile=profile)
+    _prepare_managed_home(
+        _system_codex_home(),
+        layout.codex_home,
+        profile=profile,
+        workspace_path=_project_root_from_runtime_dir(runtime_dir),
+    )
     _ensure_session_namespace_authority(runtime_dir, layout.codex_home, layout.session_root, profile=profile)
 
     return {
@@ -205,8 +215,20 @@ def _system_codex_home() -> Path:
     return Path(os.environ.get('CODEX_HOME') or (Path.home() / '.codex')).expanduser()
 
 
-def _prepare_managed_home(source_home: Path, target_home: Path, *, profile) -> None:
-    materialize_codex_home_config(target_home, profile=profile, source_home=source_home)
+def _prepare_managed_home(source_home: Path, target_home: Path, *, profile, workspace_path: Path | None) -> None:
+    materialize_codex_home_config(
+        target_home,
+        profile=profile,
+        source_home=source_home,
+        workspace_path=workspace_path,
+    )
+
+
+def _project_root_from_runtime_dir(runtime_dir: Path) -> Path | None:
+    ccb_dir = find_project_ccb_dir(runtime_dir)
+    if ccb_dir is None:
+        return None
+    return ccb_dir.parent
 
 
 def _ensure_session_namespace_authority(runtime_dir: Path, codex_home: Path, session_root: Path, *, profile) -> None:

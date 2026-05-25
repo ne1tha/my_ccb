@@ -31,7 +31,6 @@ def materialize_provider_profile(
     spec: 'AgentSpec',
     workspace_path: Path,
 ) -> ResolvedProviderProfile:
-    del workspace_path
     runtime_dir = layout.agent_provider_runtime_dir(spec.name, spec.provider)
     runtime_dir.mkdir(parents=True, exist_ok=True)
     profile_spec = spec.provider_profile
@@ -42,6 +41,7 @@ def materialize_provider_profile(
             spec=spec,
             profile_spec=profile_spec,
             profile_root=profile_root,
+            workspace_path=workspace_path,
         )
     elif spec.provider == 'claude':
         profile = _materialize_claude_profile(
@@ -99,12 +99,13 @@ def _materialize_codex_profile(
     spec: 'AgentSpec',
     profile_spec: ProviderProfileSpec,
     profile_root: Path,
+    workspace_path: Path,
 ) -> ResolvedProviderProfile:
     needs_runtime_home = profile_spec.mode != 'inherit' or profile_spec.home is not None or bool(profile_spec.env)
     runtime_home = None
     if needs_runtime_home:
         runtime_home = profile_root
-        materialize_codex_home_config(runtime_home, profile=profile_spec)
+        materialize_codex_home_config(runtime_home, profile=profile_spec, workspace_path=workspace_path)
 
     return ResolvedProviderProfile(
         provider=spec.provider,

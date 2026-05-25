@@ -191,6 +191,33 @@ def test_materialize_codex_profile_writes_agent_local_provider_config_for_explic
     assert (runtime_home / '.tmp' / 'plugins' / 'plugins' / 'weatherpromise' / 'skills' / 'weatherpromise' / 'SKILL.md').read_text(encoding='utf-8') == 'plugin skill explicit\n'
 
 
+def test_materialize_codex_home_config_trusts_workspace_and_git_root(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    project_root = tmp_path / 'repo-under-git' / 'child'
+    git_root = tmp_path / 'repo-under-git'
+    (git_root / '.git').mkdir(parents=True, exist_ok=True)
+    project_root.mkdir(parents=True, exist_ok=True)
+    source_home = tmp_path / 'system-codex-home'
+    target_home = tmp_path / 'runtime-codex-home'
+    source_home.mkdir(parents=True, exist_ok=True)
+    (source_home / 'config.toml').write_text('model = "gpt-5"\n', encoding='utf-8')
+    monkeypatch.setenv('CODEX_HOME', str(source_home))
+
+    codex_home_config.materialize_codex_home_config(
+        target_home,
+        profile=ProviderProfileSpec(mode='isolated'),
+        source_home=source_home,
+        workspace_path=project_root,
+    )
+
+    config_text = (target_home / 'config.toml').read_text(encoding='utf-8')
+    assert f'[projects."{project_root}"]' in config_text
+    assert f'[projects."{git_root}"]' in config_text
+    assert config_text.count('trust_level = "trusted"') >= 2
+
+
 def test_materialize_codex_profile_absolutizes_inherited_model_instructions_file(
     tmp_path: Path,
     monkeypatch,

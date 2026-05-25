@@ -38,6 +38,7 @@ def materialize_codex_home_config(
     *,
     profile=None,
     source_home: Path | None = None,
+    workspace_path: Path | None = None,
 ) -> Path:
     target_home = Path(target_home).expanduser()
     source_home = Path(source_home).expanduser() if source_home is not None else _system_codex_home()
@@ -58,6 +59,7 @@ def materialize_codex_home_config(
     else:
         _write_managed_config_stub(target_config)
 
+    _ensure_workspace_trust(target_config, workspace_path=workspace_path)
     _materialize_auth_file(
         source_home / 'auth.json',
         target_home / 'auth.json',
@@ -236,6 +238,83 @@ def _normalize_inherited_config_payload(source_config: Path, payload: dict[str, 
     normalized = _clone_mapping(payload)
     _absolutize_model_instructions_file(source_config, normalized)
     return normalized
+
+
+def _ensure_workspace_trust(target_config: Path, *, workspace_path: Path | None) -> None:
+    trust_paths = _workspace_trust_paths(workspace_path)
+    if not trust_paths:
+        return
+    if _import_optional_toml_reader() is None:
+        _append_workspace_trust_sections(target_config, trust_paths)
+        return
+    payload = _read_source_config_payload(target_config)
+    _add_trusted_projects(payload, trust_paths)
+    target_config.parent.mkdir(parents=True, exist_ok=True)
+    target_config.write_text(_render_toml_document(payload), encoding='utf-8')
+
+
+def _workspace_trust_paths(workspace_path: Path | None) -> tuple[Path, ...]:
+    if workspace_path is None:
+        return ()
+    workspace = _normalized_path_or_none(workspace_path)
+    if workspace is None:
+        return ()
+    paths = [workspace]
+    git_root = _find_git_root(workspace)
+    if git_root is not None:
+        paths.append(git_root)
+    return tuple(dict.fromkeys(paths))
+
+
+def _normalized_path_or_none(path: Path) -> Path | None:
+    try:
+        raw = Path(path).expanduser()
+        try:
+            return raw.resolve()
+        except Exception:
+            return raw.absolute()
+    except Exception:
+        return None
+
+
+def _find_git_root(path: Path) -> Path | None:
+    current = Path(path)
+    if current.exists() and not current.is_dir():
+        current = current.parent
+    for candidate in (current, *current.parents):
+        if (candidate / '.git').exists():
+            return _normalized_path_or_none(candidate)
+    return None
+
+
+def _add_trusted_projects(payload: dict[str, object], trust_paths: tuple[Path, ...]) -> None:
+    projects = payload.get('projects')
+    if not isinstance(projects, dict):
+        projects = {}
+        payload['projects'] = projects
+    for path in trust_paths:
+        key = str(path)
+        entry = projects.get(key)
+        if not isinstance(entry, dict):
+            entry = {}
+            projects[key] = entry
+        entry['trust_level'] = 'trusted'
+
+
+def _append_workspace_trust_sections(target_config: Path, trust_paths: tuple[Path, ...]) -> None:
+    existing = _safe_read_text(target_config)
+    additions: list[str] = []
+    for path in trust_paths:
+        header = f'[projects.{json.dumps(str(path))}]'
+        if header in existing:
+            continue
+        additions.extend(['', header, 'trust_level = "trusted"'])
+    if not additions:
+        return
+    suffix = '\n'.join(additions).strip('\n')
+    separator = '' if not existing or existing.endswith('\n') else '\n'
+    target_config.parent.mkdir(parents=True, exist_ok=True)
+    target_config.write_text(f'{existing}{separator}{suffix}\n', encoding='utf-8')
 
 
 def _absolutize_model_instructions_file(source_config: Path, payload: dict[str, object]) -> None:
